@@ -74,7 +74,7 @@ class MainApplication(tk.Frame):
         self.plotAll()
                 
     def setupPlot(self):
-        self.figure = plt.figure(figsize=(5,5), dpi=100)
+        self.figure = plt.figure(figsize=(6,4), dpi=100)
         self.figure_canvas = FigureCanvasTkAgg(self.figure, self)
         self.toolbar_frame = tk.Frame(self.parent)
         self.toolbar_frame.grid(row=1,column=0)
