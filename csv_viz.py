@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 import matplotlib, os
 import numpy as np
 
+try:
+    from config import path, lambdadict
+except ImportError:
+    path = ""
+    lambdadict = {}
+
 matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg,
@@ -19,16 +25,17 @@ class MainApplication(tk.Frame):
         self.parent.grid_rowconfigure(0, weight=1)
 
         self.grid(row=0,column=0,sticky="nsew")
-        self.tool_bar = ttk.Frame(parent, width=200)
+        self.tool_bar = ttk.Frame(parent, width=120)
         self.tool_bar.grid(row=0, column=1)
-        self.parent.grid_columnconfigure(1, minsize=150, weight=0)
+        self.parent.grid_columnconfigure(1, minsize=120, weight=0)
         
         self.files = []
+        self.path = path
+        self.lambdadict = lambdadict
         
         self.setupPlot()
         self.parent.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.getFiles()
-        # self.plotAll()
         
     def setToolbar(self):
         # reset toolbar
@@ -46,10 +53,20 @@ class MainApplication(tk.Frame):
             self.toolbaritems[k] = tk.BooleanVar()
         i = 0
         for i,k in enumerate(keyset):
-            tk.Checkbutton(self.tool_bar, text=k, variable=self.toolbaritems[k], command=self.plotAll).grid(row=i, sticky="nsew")
+            tk.Checkbutton(self.tool_bar, text=k, variable=self.toolbaritems[k], command=self.plotAll).grid(row=i, sticky="nsew",pady=3)
         # print("setting buttons", i)
-        tk.Button(self.tool_bar, text="Open New", command=self.getFiles).grid(row=i+1, sticky="nsew")
-        tk.Button(self.tool_bar, text="Delete All", command=self.removeFiles).grid(row=i+2, sticky="nsew")
+        tk.Button(self.tool_bar, text="Open New", command=self.getFiles).grid(row=i+1, sticky="nsew",pady=3)
+        tk.Button(self.tool_bar, text="Delete All", command=self.removeFiles).grid(row=i+2, sticky="nsew",pady=3)
+
+    def writeConfig(self):
+        try:
+            with open('config.py', 'r') as file:
+                lines = file.readlines()
+        except FileNotFoundError:
+            lines = [""]
+        lines[0] = "path='"+self.path+"'\n"
+        with open('config.py', 'w') as file:
+            file.writelines(lines)
 
     def removeFiles(self):
         self.files = []
@@ -63,13 +80,20 @@ class MainApplication(tk.Frame):
         self.toolbar_frame.grid(row=1,column=0)
         NavigationToolbar2Tk(self.figure_canvas, self.toolbar_frame)
         self.ax = self.figure.add_subplot()
-        self.ax.plot([1,2,3,4],[500,3,2,1],label="test")
+        self.ax.plot([1,2,3,4],[7,3,2,1],label="test")
         self.figure_canvas.get_tk_widget().pack(side="top", fill="both", expand=True)
         
     def getFiles(self):
-        files = tk.filedialog.askopenfilenames(parent=root, title='Choose CSV logfiles', initialdir=os.getcwd(), filetypes=[("CSV files", "*.csv")])
+        if self.path:
+            p = self.path
+        else:
+            p = os.getcwd()
+        files = tk.filedialog.askopenfilenames(parent=root, title='Choose CSV logfiles', initialdir=p, filetypes=[("CSV files", "*.csv")])
         for f in files:
             self.files.append(f)
+        s = f.split("/")
+        self.path = "/".join(s[:-1])
+        self.writeConfig()
         self.getAllData()
 
     def getAllData(self):
@@ -84,8 +108,10 @@ class MainApplication(tk.Frame):
         with open(path) as f:
             header = f.readline().strip('\n').split(",")
         data = np.genfromtxt(path,skip_header=1,delimiter=",")
-        for i,e in enumerate(header):
+        for i,e in enumerate(header):                
             res[e] = data[:,i]
+            if e in lambdadict:
+                res[e] = [lambdadict[e](x) for x in res[e]]
         return res
             
     def plotAll(self):
