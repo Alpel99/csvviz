@@ -5,10 +5,17 @@ import matplotlib, os
 import numpy as np
 
 try:
-    from config import path, lambdadict
+    from config import path, lambdadict,lineno_header_data, no_headerlines_ignore, x_axis_field, delimiter, unwanted_keys, lineskipper
 except ImportError:
     path = ""
     lambdadict = {}
+    lineno_header_data = 0
+    no_headerlines_ignore = 1
+    x_axis_field="time"
+    delimiter=","
+    unwanted_keys=[]
+    lineskipper = lambda file: (line for line in file)
+
 
 matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import (
@@ -32,6 +39,11 @@ class MainApplication(tk.Frame):
         self.files = []
         self.path = path
         self.lambdadict = lambdadict
+        self.lineno_header_data = lineno_header_data
+        self.no_headerlines_ignore = no_headerlines_ignore
+        self.x_axis_field=x_axis_field
+        self.delimiter = delimiter
+        self.unwanted_keys = unwanted_keys
         
         self.setupPlot()
         self.parent.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -47,13 +59,17 @@ class MainApplication(tk.Frame):
         for k in self.data.keys():
             for var in self.data[k].keys():
                 keyset.add(var)
-        if "time" in keyset:
-            keyset.remove("time")
+        if self.x_axis_field in keyset:
+            keyset.remove(self.x_axis_field)
+        for e in self.unwanted_keys:
+            if e in keyset:
+                keyset.remove(e)
+        keyset=sorted(keyset)
         for k in keyset:
             self.toolbaritems[k] = tk.BooleanVar()
         i = 0
         for i,k in enumerate(keyset):
-            tk.Checkbutton(self.tool_bar, text=k, variable=self.toolbaritems[k], command=self.plotAll).grid(row=i, sticky="nsew",pady=3)
+            tk.Checkbutton(self.tool_bar, text=k, variable=self.toolbaritems[k], command=self.plotAll).grid(row=i, sticky="nsew")#,pady=3
         # print("setting buttons", i)
         tk.Button(self.tool_bar, text="Open New", command=self.getFiles).grid(row=i+1, sticky="nsew",pady=3)
         tk.Button(self.tool_bar, text="Delete All", command=self.removeFiles).grid(row=i+2, sticky="nsew",pady=3)
@@ -63,7 +79,16 @@ class MainApplication(tk.Frame):
             with open('config.py', 'r') as file:
                 lines = file.readlines()
         except FileNotFoundError:
-            lines = [""]
+            lines = [
+                'path = ''\n',
+                'lineno_header_data = 0\n',
+                'no_headerlines_ignore = 1\n',
+                'x_axis_field = "time"\n',
+                'delimiter = ","\n',
+                'unwanted_keys = []\n',
+                'lineskipper = lambda file: (line for line in file)\n',
+                'lambdadict = {}\n',
+            ]
         lines[0] = "path='"+self.path+"'\n"
         with open('config.py', 'w') as file:
             file.writelines(lines)
@@ -106,8 +131,15 @@ class MainApplication(tk.Frame):
     def readData(self, path):
         res = {}
         with open(path) as f:
-            header = f.readline().strip('\n').split(",")
-        data = np.genfromtxt(path,skip_header=1,delimiter=",")
+            lines=f.readlines()
+            header = lines[self.lineno_header_data].strip('\n').split(",")
+        fi = open(path, "r")
+        try:
+            data = np.genfromtxt(lineskipper(fi),skip_header=self.no_headerlines_ignore,delimiter=self.delimiter,autostrip=True)
+        except ValueError as e:
+            print("Something went wrong reading the file\nplease check config for lineno_header_data and no_headerlines_ignore")
+            print(e)
+            
         for i,e in enumerate(header):                
             res[e] = data[:,i]
             if e in lambdadict:
@@ -116,13 +148,18 @@ class MainApplication(tk.Frame):
             
     def plotAll(self):
         self.ax.clear()
+        ylabels = []
         for key in self.data.keys():
             data = self.data[key]
             for var in data.keys():
-                if var != "time":
-                    if self.toolbaritems[var].get():
-                        self.ax.plot(data["time"],data[var],label=key.split(".")[0]+"-"+var)
-                        self.ax.legend()
+                if var != self.x_axis_field:
+                    if var in self.toolbaritems.keys():
+                        if self.toolbaritems[var].get():
+                            self.ax.plot(data[self.x_axis_field],data[var],label=key.split(".")[0]+"-"+var)
+                            ylabels.append(var)
+                            self.ax.legend()
+        self.ax.set_xlabel(self.x_axis_field)
+        self.ax.set_ylabel(" / ".join(ylabels))
         self.figure.canvas.draw()
 
     def on_closing(self):
