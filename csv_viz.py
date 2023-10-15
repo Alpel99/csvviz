@@ -113,7 +113,7 @@ class MainApplication(tk.Frame):
             p = self.path
         else:
             p = os.getcwd()
-        files = tk.filedialog.askopenfilenames(parent=root, title='Choose CSV logfiles', initialdir=p, filetypes=[("CSV files", "*.csv")])
+        files = tk.filedialog.askopenfilenames(parent=root, title='Choose CSV logfiles', initialdir=p, filetypes=[("CSV files", "*.csv"), ("CSV files", "*.CSV")])
         for f in files:
             self.files.append(f)
         s = f.split("/")
