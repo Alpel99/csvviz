@@ -44,10 +44,14 @@ class MainApplication(tk.Frame):
         self.x_axis_field=x_axis_field
         self.delimiter = delimiter
         self.unwanted_keys = unwanted_keys
-        
+
+        self.ax = []
+        self.twinx = True
+
         self.setupPlot()
         self.parent.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.getFiles()
+
         
     def setToolbar(self):
         # reset toolbar
@@ -73,6 +77,8 @@ class MainApplication(tk.Frame):
         # print("setting buttons", i)
         tk.Button(self.tool_bar, text="Open New", command=self.getFiles).grid(row=i+1, sticky="nsew",pady=3)
         tk.Button(self.tool_bar, text="Delete All", command=self.removeFiles).grid(row=i+2, sticky="nsew",pady=3)
+        self.twinxbtn = tk.Button(self.tool_bar, text="TwinX", command=self.swapTwinX, relief="sunken")
+        self.twinxbtn.grid(row=i+3, sticky="nsew",pady=3)
 
     def writeConfig(self):
         try:
@@ -104,8 +110,8 @@ class MainApplication(tk.Frame):
         self.toolbar_frame = tk.Frame(self.parent)
         self.toolbar_frame.grid(row=1,column=0)
         NavigationToolbar2Tk(self.figure_canvas, self.toolbar_frame)
-        self.ax = self.figure.add_subplot()
-        self.ax.plot([1,2,3,4],[7,3,2,1],label="test")
+        self.ax.append(self.figure.add_subplot())
+        self.ax[0].plot([1,2,3,4],[7,3,2,1],label="test")
         self.figure_canvas.get_tk_widget().pack(side="top", fill="both", expand=True)
         
     def getFiles(self):
@@ -145,21 +151,59 @@ class MainApplication(tk.Frame):
             if e in lambdadict:
                 res[e] = [lambdadict[e](x) for x in res[e]]
         return res
+    
+    def swapTwinX(self):
+        self.twinx = not self.twinx
+        self.twinxbtn.configure(relief="sunken" if self.twinx else "raised")
+        self.plotAll()
+
+    
+    def clearAx(self):
+        if(self.ax != None):
+            for axis in self.ax:
+                    axis.remove()
+            self.ax = None
             
     def plotAll(self):
-        self.ax.clear()
-        ylabels = []
+        # self.ax.clear()
+        self.clearAx()
+        ylabels, lines = [], []
+        i = 0
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         for key in self.data.keys():
             data = self.data[key]
             for var in data.keys():
                 if var != self.x_axis_field:
                     if var in self.toolbaritems.keys():
                         if self.toolbaritems[var].get():
-                            self.ax.plot(data[self.x_axis_field],data[var],label=key.split(".")[0]+"-"+var)
-                            ylabels.append(var)
-                            self.ax.legend()
-        self.ax.set_xlabel(self.x_axis_field)
-        self.ax.set_ylabel(" / ".join(ylabels))
+                            # setup ax
+                            if(self.ax == None):
+                                self.ax = [self.figure.add_subplot()]
+                            else:
+                                if(self.twinx):
+                                    self.ax.append(self.ax[0].twinx())
+                                    i += 1
+                            # plot data
+                            if(self.twinx):
+                                line, = self.ax[i].plot(data[self.x_axis_field],data[var],label=key.split(".")[0]+"-"+var, color=colors[i % len(colors)])
+                                self.ax[i].set_ylabel(var) #, labelpad=15
+                                shift = 0 if i < 2 else i-1
+                                self.ax[i].spines['right'].set_position(('outward', 60 * shift))  # Shift the axis to the right
+                            else: 
+                                line, = self.ax[0].plot(data[self.x_axis_field],data[var],label=key.split(".")[0]+"-"+var)
+                            lines.append(line)
+                            if(not self.twinx):
+                                ylabels.append(var)
+        if(self.ax == None):
+            self.ax = [self.figure.add_subplot()]
+        self.ax[0].set_xlabel(self.x_axis_field)
+        # create legend
+        labels = [line.get_label() for line in lines]
+        self.ax[0].legend(lines, labels)
+
+        if(not self.twinx):
+            self.ax[0].set_ylabel(" / ".join(ylabels))
+        self.ax[0].grid()
         self.figure.canvas.draw()
 
     def on_closing(self):
